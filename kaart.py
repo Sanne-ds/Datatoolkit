@@ -17,7 +17,7 @@ labels = ["P1", "Spaklerweg", "P3", "P4", "P5"]
 df = pd.DataFrame(coordinates, columns=["lat", "lon"])
 df["label"] = labels
 df["icon_data"] = [{
-    "url": "https://upload.wikimedia.org/wikipedia/commons/e/ec/RedDot.svg",
+    "url": ""https://maps.gstatic.com/mapfiles/api-3/images/spotlight-poi2_hdpi.png",
     "width": 128,
     "height": 128,
     "anchorY": 128

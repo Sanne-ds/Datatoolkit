@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import pydeck as pdk
 
-st.title("Metingen in Amsterdam – Google Maps pins")
+st.title("Meetlocaties")
 
 # Coördinaten
 coordinates = [

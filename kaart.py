@@ -4,7 +4,7 @@ import pydeck as pdk
 
 st.title("Metingen in Amsterdam – Google Maps pins")
 
-# Coördinaten + labels
+# Coördinaten
 coordinates = [
     (52.3597533, 4.9070122),
     (52.3406215, 4.9161200),  # Spaklerweg
@@ -12,11 +12,9 @@ coordinates = [
     (52.3677279, 4.8938338),
     (52.3674163, 4.8847137),
 ]
-labels = ["Weespergracht", "Spaklerweg", "Waterlooplein", "Rokin", "Keizergracht"]
 
 # DataFrame
 df = pd.DataFrame(coordinates, columns=["lat", "lon"])
-df["label"] = labels
 
 # Google-style pin icoon
 df["icon_data"] = [{
@@ -44,15 +42,6 @@ st.pydeck_chart(pdk.Deck(
             size_scale=10,
             get_position='[lon, lat]',
             pickable=True,
-        ),
-        pdk.Layer(
-            "TextLayer",
-            data=df,
-            get_position='[lon, lat]',
-            get_text="label",
-            get_size=16,
-            get_color=[0, 0, 0],
-            get_alignment_baseline="'bottom'",
         ),
     ],
 ))

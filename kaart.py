@@ -12,7 +12,7 @@ coordinates = [
     (52.3677279, 4.8938338),
     (52.3674163, 4.8847137),
 ]
-labels = ["P1", "Spaklerweg", "P3", "P4", "P5"]
+labels = ["Weespergracht", "Spaklerweg", "Waterlooplein", "Rokin", "Keizergracht"]
 
 # DataFrame
 df = pd.DataFrame(coordinates, columns=["lat", "lon"])

@@ -3,6 +3,7 @@ import pandas as pd
 import folium
 from streamlit_folium import st_folium
 import re
+import io
 
 st.set_page_config(layout="wide")
 
@@ -44,6 +45,13 @@ def save_data(df_to_save):
     except Exception as e:
         st.error(f"Fout bij opslaan van data: {e}")
 
+def convert_df_to_excel(df_to_convert):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df_to_convert.to_excel(writer, index=False, sheet_name='Sheet1')
+    processed_data = output.getvalue()
+    return processed_data
+
 if 'data' not in st.session_state:
     st.session_state['data'] = load_data()
 
@@ -59,7 +67,7 @@ with tab_info:
         
         - Ga naar **'Kaart'** om de waterkwaliteit op een specifieke datum te bekijken.  
         - Voeg zelf metingen toe onder **'Nieuwe meting'**.  
-        - Onder **'Metingen beheren'** kun je eerder ingevoerde data verwijderen.  
+        - Onder **'Metingen beheren'** kun je eerder ingevoerde data verwijderen en data downloaden.  
         
         Veel succes!
     """)
@@ -67,7 +75,7 @@ with tab_info:
 with tab_kaart:
     st.title("🌊 Waterkwaliteit in Amsterdam")
 
-    # Filters in tab "Kaart"
+    # Filters in de pagina (niet sidebar)
     if not df['Datum'].dropna().empty:
         datum_selectie = st.date_input("Kies meetdag", df['Datum'].min())
     else:
@@ -78,11 +86,6 @@ with tab_kaart:
         ['PH', 'Temperatuur', 'ORP', 'EC', 'CF', 'TDS', 'Humidity', 'Buitentemperatuur'],
         default=['PH', 'Temperatuur']
     )
-
-    # Refresh knop onder filters
-    if st.button("Refresh data"):
-        load_data.clear()
-        st.experimental_rerun()
 
     filtered_df = df[df['Datum'] == pd.to_datetime(datum_selectie)]
 
@@ -229,4 +232,20 @@ with tab_beheer:
             else:
                 st.warning("Geen metingen geselecteerd om te verwijderen.")
     else:
-        st.info("Er zijn nog geen metingen om te beheren.")
+        st.info("Geen metingen beschikbaar om te beheren.")
+
+    st.markdown("---")
+    st.write("Download de dataset met de huidige metingen:")
+
+    df_download = st.session_state['data'].copy()
+    df_download['Datum'] = df_download['Datum'].dt.strftime('%d-%m-%Y')
+    df_download['Meetdag'] = df_download['Meetdag'].dt.strftime('%d-%m-%Y')
+
+    excel_data = convert_df_to_excel(df_download)
+
+    st.download_button(
+        label="Download Excel bestand",
+        data=excel_data,
+        file_name='Waterkwaliteit.xlsx',
+        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )

@@ -7,13 +7,16 @@ import io
 
 st.set_page_config(layout="wide")
 
-DATA_FILE = "Waterkwaliteit.xlsx"
+# Define the file path for your data
+DATA_FILE = "Waterkwaliteit.xlsx"  # Or "Waterkwaliteit.csv" if you prefer CSV
 
+# ---------- 1. Data inladen ----------
 @st.cache_data
 def load_data():
     try:
         df = pd.read_excel(DATA_FILE)
         df.columns = df.columns.str.strip()
+
         if 'Meetdag' in df.columns:
             df['Meetdag'] = pd.to_datetime(df['Meetdag'], dayfirst=True, errors='coerce')
         else:
@@ -36,6 +39,7 @@ def load_data():
         df['Datum'] = pd.to_datetime(df['Datum'])
     return df
 
+# Function to save data
 def save_data(df_to_save):
     try:
         df_to_save.to_excel(DATA_FILE, index=False)
@@ -43,31 +47,34 @@ def save_data(df_to_save):
     except Exception as e:
         st.error(f"Fout bij opslaan van data: {e}")
 
+# Data initialiseren en opslaan in session_state zodat we ze kunnen uitbreiden
 if 'data' not in st.session_state:
     st.session_state['data'] = load_data()
 
 df = st.session_state['data']
 
+# Add button to refresh data cache
 st.sidebar.button('Refresh', on_click=load_data.clear)
 
-tab_info, tab_kaart, tab_nieuw, tab_beheer = st.tabs(["ℹ️ Info", "🗺️ Kaart", "➕ Nieuwe meting", "⚙️ Metingen beheren"])
+# Tabs aanmaken: Intro, Kaart, Nieuwe meting, Metingen beheren
+tab_intro, tab1, tab2, tab3 = st.tabs(["ℹ️ Introductie", "🗺️ Kaart", "➕ Nieuwe meting", "⚙️ Metingen beheren"])
 
-with tab_info:
-    st.title("Welkom bij het Waterkwaliteitsdashboard")
+with tab_intro:
+    st.title("Welkom bij het Waterkwaliteitsdashboard 🌊")
     st.markdown("""
     Dit dashboard toont waterkwaliteitsmetingen in Amsterdam.
     
-    - Bekijk meetpunten op de kaart.
-    - Voeg nieuwe metingen toe.
-    - Beheer bestaande metingen.
+    **Gebruik de tab 'Kaart' om metingen op een kaart te bekijken met filteropties.**  
+    **In 'Nieuwe meting' kun je data toevoegen.**  
+    **'Metingen beheren' biedt opties om metingen te verwijderen of te downloaden.**
     
-    Gebruik het tabblad 'Kaart' om filters toe te passen en data te downloaden.
+    Veel succes!
     """)
 
-with tab_kaart:
+with tab1:
     st.title("🌊 Waterkwaliteit in Amsterdam")
 
-    # Filters alleen hier
+    # Filters in tab ipv sidebar
     if not df['Datum'].dropna().empty:
         datum_selectie = st.date_input("Kies meetdag", df['Datum'].min())
     else:
@@ -80,22 +87,6 @@ with tab_kaart:
     )
 
     filtered_df = df[df['Datum'] == pd.to_datetime(datum_selectie)]
-
-    # Download knop Excel
-    def convert_df_to_excel(df_to_convert):
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            df_to_convert.to_excel(writer, index=False, sheet_name='Data')
-        return output.getvalue()
-
-    excel_data = convert_df_to_excel(filtered_df)
-
-    st.download_button(
-        label="Download gefilterde data als Excel",
-        data=excel_data,
-        file_name=f'waterkwaliteit_{datum_selectie.strftime("%Y%m%d")}.xlsx',
-        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
 
     st.markdown(f"### Meetpunten op {datum_selectie.strftime('%d-%m-%Y')}")
 
@@ -135,7 +126,7 @@ with tab_kaart:
 
     st_folium(kaart, width=900, height=600)
 
-with tab_nieuw:
+with tab2:
     st.header("Nieuwe meting toevoegen")
 
     with st.form("meting_form"):
@@ -154,7 +145,8 @@ with tab_nieuw:
         ec = st.number_input("EC", value=None)
         cf = st.number_input("CF", value=None)
         tds = st.number_input("TDS", value=None)
-        humidity = st.number_input("Humidity (%)", min_value=0.0, max_value=100.0, format="%.1f", step=0.1, help="Geef een waarde tussen 0 en 100", value=None)
+        humidity = st.number_input("Humidity (%)", min_value=0.0, max_value=100.0, format="%.1f", step=0.1,
+                                   help="Geef een waarde tussen 0 en 100", value=None)
         buitentemperatuur = st.number_input("Buitentemperatuur (°C)", value=None)
 
         submitted = st.form_submit_button("Toevoegen")
@@ -168,13 +160,11 @@ with tab_nieuw:
 
             if ph is not None:
                 if ph < 0:
-                    fouten.append("pH-waarde moet positief zijn.")
+                    fouten.append("pH-waarde kan niet negatief zijn.")
                 elif ph > 14:
-                    warning = st.warning("PH-waarde is hoger dan 14. Weet je zeker dat dit klopt?")
-                    # To confirm override, add a checkbox:
-                    override = st.checkbox("Ja, ik weet zeker dat deze waarde klopt")
-                    if not override:
-                        fouten.append("PH-waarde is hoger dan normaal, bevestig met checkbox.")
+                    confirm = st.checkbox("pH-waarde is hoger dan 14. Weet je zeker dat dit klopt?")
+                    if not confirm:
+                        fouten.append("Bevestig dat de pH-waarde klopt.")
 
             if fouten:
                 for fout in fouten:
@@ -207,12 +197,31 @@ with tab_nieuw:
                 except Exception as e:
                     st.error(f"Er is een onverwachte fout opgetreden: {e}")
 
-with tab_beheer:
+with tab3:
     st.header("Metingen beheren")
 
     if not st.session_state['data'].empty:
+        min_datum = st.session_state['data']['Datum'].min()
+        max_datum = st.session_state['data']['Datum'].max()
+        datum_selectie = st.date_input("Selecteer datum (of meerdere)", 
+                                       [min_datum, max_datum],
+                                       min_value=min_datum,
+                                       max_value=max_datum)
+
+        if isinstance(datum_selectie, list) and len(datum_selectie) == 2:
+            start_datum, eind_datum = datum_selectie
+            filtered_df = st.session_state['data'][
+                (st.session_state['data']['Datum'] >= pd.to_datetime(start_datum)) &
+                (st.session_state['data']['Datum'] <= pd.to_datetime(eind_datum))
+            ]
+        else:
+            filtered_df = st.session_state['data']
+
+        st.write(f"Toon metingen tussen {start_datum.strftime('%d-%m-%Y')} en {eind_datum.strftime('%d-%m-%Y')}")
+
         st.write("Selecteer de metingen die je wilt verwijderen:")
-        df_display = st.session_state['data'].reset_index()
+
+        df_display = filtered_df.reset_index()
         df_display.rename(columns={'index': 'Originele Index'}, inplace=True)
 
         selected_rows_indices = []
@@ -236,5 +245,20 @@ with tab_beheer:
                 st.experimental_rerun()
             else:
                 st.warning("Geen metingen geselecteerd om te verwijderen.")
+
+        def convert_df_to_excel(df_to_convert):
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df_to_convert.to_excel(writer, index=False, sheet_name='Data')
+            return output.getvalue()
+
+        excel_data = convert_df_to_excel(filtered_df)
+
+        st.download_button(
+            label="Download gefilterde data als Excel",
+            data=excel_data,
+            file_name=f"metingen_{start_datum.strftime('%Y%m%d')}_tot_{eind_datum.strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
     else:
         st.info("Er zijn nog geen metingen om te beheren.")

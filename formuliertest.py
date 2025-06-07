@@ -6,7 +6,6 @@ import re
 
 st.set_page_config(layout="wide")
 
-# ---------- 1. Data inladen ----------
 DATA_FILE = "Waterkwaliteit.xlsx"
 
 @st.cache_data
@@ -49,14 +48,26 @@ if 'data' not in st.session_state:
     st.session_state['data'] = load_data()
 
 df = st.session_state['data']
-
 st.sidebar.button('Refresh', on_click=load_data.clear)
 
-# Tabs aanmaken
-tab1, tab2, tab3, tab4 = st.tabs(["🗺️ Kaart", "➕ Nieuwe meting", "⚙️ Metingen beheren", "ℹ️ Info"])
+# Tabs (info tab eerst)
+tab_info, tab1, tab2, tab3 = st.tabs(["ℹ️ Info", "🗺️ Kaart", "➕ Nieuwe meting", "⚙️ Metingen beheren"])
+
+with tab_info:
+    st.title("🌍 Dashboard Waterkwaliteit")
+    st.markdown("""
+        Welkom bij het dashboard voor waterkwaliteitsmetingen in Amsterdam.  
+        Hier kun je metingen bekijken op de kaart, nieuwe data toevoegen, of bestaande metingen beheren.  
+        
+        - Ga naar **'Kaart'** om de waterkwaliteit op een specifieke datum te bekijken.  
+        - Voeg zelf metingen toe onder **'Nieuwe meting'**.  
+        - Onder **'Metingen beheren'** kun je eerder ingevoerde data verwijderen.  
+        
+        Veel succes!
+    """)
 
 with tab1:
-    # ---------- Sidebar filters ----------
+    # ---------- Sidebar filters alleen hier ----------
     st.sidebar.header("Filter opties")
 
     if not df['Datum'].dropna().empty:
@@ -146,12 +157,17 @@ with tab2:
                 for fout in fouten:
                     st.error(fout)
             else:
-                bevestiging_ok = True
+                ph_waarschuwing = False
                 if ph is not None and ph > 14:
-                    st.warning(f"De ingevoerde pH-waarde ({ph}) lijkt ongewoon hoog. Weet je zeker dat dit klopt?")
-                    bevestiging_ok = st.checkbox("Ja, deze waarde klopt")
+                    st.warning(f"Opgelet: De ingevoerde pH-waarde is {ph}, wat erg hoog is.")
+                    ph_waarschuwing = True
 
-                if ph is None or ph <= 14 or bevestiging_ok:
+                doorgaan = True
+                if ph_waarschuwing:
+                    bevestiging = st.radio("Weet je zeker dat deze waarde klopt?", ("Nee", "Ja"))
+                    doorgaan = bevestiging == "Ja"
+
+                if doorgaan:
                     try:
                         coordinaten = f"{lat}, {lon}"
                         nieuwe_meting = {
@@ -175,18 +191,17 @@ with tab2:
 
                         save_data(updated_df)
                         st.success("Nieuwe meting toegevoegd en opgeslagen! Ga terug naar tab 'Kaart' om de update te zien.")
-                        
                     except Exception as e:
                         st.error(f"Er is een onverwachte fout opgetreden: {e}")
                 else:
-                    st.info("Controleer de pH-waarde en probeer opnieuw.")
+                    st.info("Meting is niet opgeslagen. Controleer de pH-waarde.")
 
 with tab3:
     st.header("Metingen beheren")
 
     if not st.session_state['data'].empty:
         st.write("Selecteer de metingen die je wilt verwijderen:")
-        
+
         df_display = st.session_state['data'].reset_index()
         df_display.rename(columns={'index': 'Originele Index'}, inplace=True)
 
@@ -213,17 +228,3 @@ with tab3:
                 st.warning("Geen metingen geselecteerd om te verwijderen.")
     else:
         st.info("Er zijn nog geen metingen om te beheren.")
-
-with tab4:
-    st.header("ℹ️ Informatie")
-    st.markdown("""
-    Welkom bij het waterkwaliteitsdashboard van Amsterdam!  
-    Hier kun je:
-    - De meetpunten bekijken op de kaart
-    - Nieuwe metingen toevoegen
-    - Bestaande metingen beheren of verwijderen
-
-    **Let op:** De filters aan de linkerkant zijn alleen zichtbaar in het tabblad **'Kaart'**.
-
-    Heb je vragen of feedback? Neem contact op met het datateam.
-    """)

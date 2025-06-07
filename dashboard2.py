@@ -2,112 +2,98 @@ import streamlit as st
 import pandas as pd
 import folium
 from streamlit_folium import st_folium
-import re
+import os
 from datetime import datetime
 
 st.set_page_config(layout="wide")
 
-CSV_FILE = "Waterkwaliteit_data.csv"
+DATA_PATH = "Waterkwaliteit.csv"
 
 # ---------- 1. Data inladen ----------
 @st.cache_data
 def load_data():
-    try:
-        df = pd.read_csv(CSV_FILE)
-        # Datum-kolom aanmaken
-        df['Datum'] = pd.to_datetime(df['Meetdag'], format='%d-%m', errors='coerce')
-    except FileNotFoundError:
-        df = pd.DataFrame(columns=[
-            'Meetdag', 'Tijdstip', 'Locatie', 'Coordinaten', 'PH', 'Temperatuur',
-            'ORP', 'EC', 'CF', 'TDS', 'Humidity', 'zon/schaduw', 'meetpunt', 'Buitentemperatuur', 'Datum'
-        ])
+    if os.path.exists(DATA_PATH):
+        df = pd.read_csv(DATA_PATH)
+        df['Datum'] = pd.to_datetime(df['Meetdag'], format='%Y-%m-%d', errors='coerce')
+    else:
+        df = pd.DataFrame()
     return df
 
-
-df = load_data()
-
-# ---------- Tabs maken ----------
-tab1, tab2 = st.tabs(["Dashboard", "Nieuwe meting toevoegen"])
-
-with tab1:
-    # ---------- 2. Sidebar filters ----------
+# ---------- 2. Hoofdpagina met kaart ----------
+def kaartpagina(df):
     st.sidebar.header("Filter opties")
     if df.empty:
-        st.warning("Er zijn nog geen meetgegevens beschikbaar.")
-    else:
-        datum_selectie = st.sidebar.date_input("Kies meetdag", df['Datum'].min())
-        waardes = st.sidebar.multiselect(
-            "Waardes om te tonen",
-            ['PH', 'Temperatuur', 'ORP', 'EC', 'CF', 'TDS', 'Humidity', 'Buitentemperatuur'],
-            default=['PH', 'Temperatuur']
-        )
+        st.warning("Nog geen meetdata beschikbaar.")
+        return
 
-        # ---------- 3. Filter op geselecteerde datum ----------
-        filtered_df = df[df['Datum'] == pd.to_datetime(datum_selectie)]
+    unieke_dagen = df['Datum'].dropna().dt.date.unique()
+    datum_selectie = st.sidebar.date_input("Kies meetdag", min_value=min(unieke_dagen), max_value=max(unieke_dagen))
+    waardes = st.sidebar.multiselect("Waardes om te tonen", ['PH', 'Temperatuur', 'ORP', 'EC', 'CF', 'TDS', 'Humidity', 'Buitentemperatuur'])
 
-        # ---------- 4. Kaart bouwen ----------
-        st.title("Waterkwaliteit Meetdashboard")
-        st.markdown(f"### Meetpunten op {datum_selectie.strftime('%d-%m-%Y')}")
+    filtered_df = df[df['Datum'].dt.date == datum_selectie]
 
-        kaart = folium.Map(location=[52.36, 4.9], zoom_start=13)
+    st.title("Waterkwaliteit Meetdashboard")
+    st.markdown(f"### Meetpunten op {datum_selectie.strftime('%d-%m-%Y')}")
 
-        for _, row in filtered_df.iterrows():
-            popup_text = f"<b>{row['Locatie']}</b><br>"
-            for col in waardes:
-                if col in row and pd.notna(row[col]):
-                    popup_text += f"{col}: {row[col]}<br>"
+    kaart = folium.Map(location=[52.36, 4.9], zoom_start=13)
 
-            try:
-                lat_str, lon_str = re.split(r',\s*', str(row['Coordinaten']))
-                lat = float(lat_str)
-                lon = float(lon_str)
-            except:
-                continue
+    for _, row in filtered_df.iterrows():
+        try:
+            lat, lon = map(float, str(row['Coordinaten']).split(','))
+        except:
+            continue
 
-            kleur = "gray"
-            try:
-                ph_val = float(str(row['PH']).replace(',', '.'))
-                if 6.5 <= ph_val <= 8.5:
-                    kleur = "green"
-                elif 5.5 <= ph_val < 6.5 or 8.5 < ph_val <= 9.5:
-                    kleur = "orange"
-                else:
-                    kleur = "red"
-            except:
-                kleur = "gray"
+        # Bereken kleur op basis van PH
+        kleur = "gray"
+        try:
+            ph = float(row['PH'])
+            if 6.5 <= ph <= 8.5:
+                kleur = "green"
+            elif 6.0 <= ph < 6.5 or 8.5 < ph <= 9.0:
+                kleur = "orange"
+            else:
+                kleur = "red"
+        except:
+            pass
 
-            folium.Marker(
-                location=[lat, lon],
-                popup=folium.Popup(popup_text, max_width=300),
-                icon=folium.Icon(color=kleur)
-            ).add_to(kaart)
+        popup_text = f"<b>{row['Locatie']}</b><br>"
+        for col in waardes:
+            if col in row and pd.notna(row[col]):
+                popup_text += f"{col}: {row[col]}<br>"
 
-        st_folium(kaart, width=900, height=600)
+        folium.Marker(
+            location=[lat, lon],
+            popup=folium.Popup(popup_text, max_width=300),
+            icon=folium.Icon(color=kleur)
+        ).add_to(kaart)
 
-with tab2:
-    st.markdown("### Voeg nieuwe meting toe")
+    st_folium(kaart, width=900, height=600)
 
-    with st.form("meet_data_form"):
-        meetdag = st.date_input("Meetdag", datetime.today())
-        tijdstip = st.text_input("Tijdstip (bijv. 13.00-13.15)")
+# ---------- 3. Data toevoegen ----------
+def invoerpagina():
+    st.title("Voeg nieuwe meting toe")
+
+    with st.form("meet_formulier"):
+        meetdag = st.date_input("Meetdag", value=datetime.today())
+        tijdstip = st.text_input("Tijdstip (bv. 14.00-14.15)")
         locatie = st.text_input("Locatie")
-        coordinaten = st.text_input("Coördinaten (bijv. 52.36, 4.90)")
-        ph = st.number_input("pH", min_value=0.0, max_value=14.0, step=0.01, format="%.2f")
-        temperatuur = st.number_input("Temperatuur (°C)", format="%.1f")
-        orp = st.number_input("ORP", format="%.0f")
-        ec = st.number_input("EC", format="%.2f")
-        cf = st.number_input("CF", format="%.1f")
-        tds = st.number_input("TDS", format="%.0f")
-        humidity = st.text_input("Humidity (bijv. 30%)")
-        zon_schaduw = st.selectbox("Zon/schaduw", ['zon', 'schaduw'])
-        meetpunt = st.selectbox("Meetpunt", ['kade', 'steiger'])
-        buitentemp = st.number_input("Buitentemperatuur", format="%.0f")
+        coordinaten = st.text_input("Coördinaten (lat, lon)", placeholder="52.36, 4.90")
+        ph = st.number_input("pH", step=0.01, format="%.2f")
+        temperatuur = st.number_input("Temperatuur (°C)", step=0.1)
+        orp = st.number_input("ORP", step=1)
+        ec = st.number_input("EC", step=0.01)
+        cf = st.number_input("CF", step=0.1)
+        tds = st.number_input("TDS", step=1)
+        humidity = st.text_input("Luchtvochtigheid (bv. 35%)")
+        zon = st.selectbox("Zon / Schaduw", ["zon", "schaduw"])
+        meetpunt = st.selectbox("Type meetpunt", ["kade", "steiger"])
+        buitentemp = st.number_input("Buitentemperatuur", step=0.1)
 
-        submitted = st.form_submit_button("Voeg toe aan dataset")
+        submitted = st.form_submit_button("Opslaan")
 
         if submitted:
             nieuwe_rij = {
-                'Meetdag': meetdag.strftime('%d-%m'),
+                'Meetdag': meetdag.strftime('%Y-%m-%d'),
                 'Tijdstip': tijdstip,
                 'Locatie': locatie,
                 'Coordinaten': coordinaten,
@@ -118,20 +104,25 @@ with tab2:
                 'CF': cf,
                 'TDS': tds,
                 'Humidity': humidity,
-                'zon/schaduw': zon_schaduw,
+                'zon/schaduw': zon,
                 'meetpunt': meetpunt,
-                'Buitentemperatuur': buitentemp,
-                'Datum': meetdag
+                'Buitentemperatuur': buitentemp
             }
 
-            nieuwe_df = pd.DataFrame([nieuwe_rij])
+            if os.path.exists(DATA_PATH):
+                df = pd.read_csv(DATA_PATH)
+                df = pd.concat([df, pd.DataFrame([nieuwe_rij])], ignore_index=True)
+            else:
+                df = pd.DataFrame([nieuwe_rij])
 
-            try:
-                bestaande_df = pd.read_csv(CSV_FILE)
-                updated_df = pd.concat([bestaande_df, nieuwe_df], ignore_index=True)
-            except FileNotFoundError:
-                updated_df = nieuwe_df
+            df.to_csv(DATA_PATH, index=False)
+            st.success("Meting opgeslagen!")
 
-            updated_df.to_csv(CSV_FILE, index=False)
-            st.success("Nieuwe meting toegevoegd! Ga terug naar het Dashboard om te zien.")
+# ---------- 4. Tabs ----------
+tab1, tab2 = st.tabs(["📍 Dashboard", "➕ Meting toevoegen"])
 
+with tab1:
+    kaartpagina(load_data())
+
+with tab2:
+    invoerpagina()

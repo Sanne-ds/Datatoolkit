@@ -57,10 +57,16 @@ df = st.session_state['data']
 tab1, tab2, tab3, tab4 = st.tabs(["ℹ️ Info", "🗺️ Kaart", "➕ Nieuwe meting", "⚙️ Metingen beheren"])
 
 with tab1:
-    st.title("Welkom bij het Waterkwaliteit Dashboard")
+    st.title("🌍 Dashboard Waterkwaliteit")
     st.markdown("""
-    Dit dashboard geeft inzicht in de waterkwaliteit in Amsterdam.
-    Gebruik de tabbladen om metingen te bekijken, nieuwe metingen toe te voegen en bestaande metingen te beheren.
+        Welkom bij het dashboard voor waterkwaliteitsmetingen in Amsterdam.  
+        Hier kun je metingen bekijken op de kaart, nieuwe data toevoegen, of bestaande metingen beheren.  
+        
+        - Ga naar **'Kaart'** om de waterkwaliteit op een specifieke datum te bekijken.  
+        - Voeg zelf metingen toe onder **'Nieuwe meting'**.  
+        - Onder **'Metingen beheren'** kun je eerder ingevoerde data verwijderen.  
+        
+        Veel succes!
     """)
 
 with tab2:

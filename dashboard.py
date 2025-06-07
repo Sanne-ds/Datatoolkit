@@ -9,7 +9,7 @@ st.set_page_config(layout="wide")
 # ---------- 1. Data inladen en voorbereiden ----------
 @st.cache_data
 def load_data():
-    df = pd.read_excel("Waterkwaliteit DataToolkit.xlsx")
+    df = pd.read_excel("Waterkwaliteit.xlsx")
 
     # Datum kolom verwerken
     df['Datum'] = pd.to_datetime(df['Meetdag'], dayfirst=True, errors='coerce')

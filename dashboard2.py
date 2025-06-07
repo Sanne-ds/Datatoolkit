@@ -6,92 +6,83 @@ import datetime
 
 st.set_page_config(layout="wide")
 
-# ---------- 1. Data inladen en voorbereiden ----------
 @st.cache_data
 def load_data():
     df = pd.read_excel("Waterkwaliteit.xlsx")
-    # Datum kolom omzetten, dayfirst=True omdat Excel dd-mm-yyyy heeft
     df['Datum'] = pd.to_datetime(df['Meetdag'], dayfirst=True, errors='coerce')
-    # Alleen datum (zonder tijd)
     df['Datum_only'] = df['Datum'].dt.date
     return df
 
-# Laad data
-df = load_data()
+# Laad originele data
+df_orig = load_data()
 
-# ---------- 2. Sessiestorage voor nieuwe metingen ----------
 if "extra_data" not in st.session_state:
-    st.session_state.extra_data = pd.DataFrame(columns=df.columns)
+    st.session_state.extra_data = pd.DataFrame(columns=df_orig.columns)
 
-# Voeg nieuwe data toe aan de dataset (in sessie)
-df = pd.concat([df, st.session_state.extra_data], ignore_index=True)
+# Combineer originele en toegevoegde data
+df = pd.concat([df_orig, st.session_state.extra_data], ignore_index=True)
 
-# ---------- 3. Sidebar filters ----------
-st.sidebar.header("Filter opties")
-
-# Unieke datums als date objecten, zonder restricties (geen min/max)
-geldige_data = df['Datum_only'].dropna()
-unieke_data = sorted(set(geldige_data))
-
-if unieke_data:
-    geselecteerde_datum = st.sidebar.date_input(
-        "Kies meetdag",
-        value=unieke_data[-1]
-    )
-else:
-    geselecteerde_datum = st.sidebar.date_input("Kies meetdag")
-
-waardes = st.sidebar.multiselect(
-    "Waardes om te tonen",
-    ['PH', 'Temperatuur', 'ORP', 'EC', 'CF', 'TDS', 'Humidity', 'Buitentemperatuur'],
-    default=['PH', 'Temperatuur']
-)
-
-# ---------- 4. Filter op geselecteerde datum ----------
-df_filtered = df[df['Datum_only'] == geselecteerde_datum]
-
-# ---------- 5. Kaart weergeven ----------
-st.title("Waterkwaliteit Meetdashboard")
-st.markdown(f"### Meetpunten op {geselecteerde_datum.strftime('%d-%m-%Y')}")
-
-kaart = folium.Map(location=[52.36, 4.9], zoom_start=13)
-
-def bepaal_marker_kleur(row):
-    # Voorbeeldregels, pas aan per jouw criteria
-    ph = row.get('PH', None)
-    if ph is None or pd.isna(ph):
-        return 'gray'
-    if ph < 6.5 or ph > 9:
-        return 'red'
-    elif 6.5 <= ph <= 7.5:
-        return 'green'
-    else:
-        return 'orange'
-
-for _, row in df_filtered.iterrows():
-    popup_text = f"<b>{row['Locatie']}</b><br>"
-    for col in waardes:
-        if col in row and pd.notna(row[col]):
-            popup_text += f"{col}: {row[col]}<br>"
-
-    # Haal lat/lon uit 'Coordinaten' kolom
-    try:
-        lat_str, lon_str = str(row['Coordinaten']).split(',')
-        lat, lon = float(lat_str.strip()), float(lon_str.strip())
-    except Exception:
-        continue
-
-    kleur = bepaal_marker_kleur(row)
-    folium.Marker(
-        location=[lat, lon],
-        popup=folium.Popup(popup_text, max_width=300),
-        icon=folium.Icon(color=kleur)
-    ).add_to(kaart)
-
-st_folium(kaart, width=900, height=600)
-
-# ---------- 6. Tab voor toevoegen nieuwe data ----------
+# Tabs maken
 tab1, tab2 = st.tabs(["Dashboard", "Nieuwe Meting"])
+
+with tab1:
+    st.title("Waterkwaliteit Meetdashboard")
+
+    # Filters in sidebar voor tab1
+    st.sidebar.header("Filter opties")
+    geldige_data = df['Datum_only'].dropna()
+    unieke_data = sorted(set(geldige_data))
+    if unieke_data:
+        geselecteerde_datum = st.sidebar.date_input(
+            "Kies meetdag",
+            value=unieke_data[-1]
+        )
+    else:
+        geselecteerde_datum = st.sidebar.date_input("Kies meetdag")
+
+    waardes = st.sidebar.multiselect(
+        "Waardes om te tonen",
+        ['PH', 'Temperatuur', 'ORP', 'EC', 'CF', 'TDS', 'Humidity', 'Buitentemperatuur'],
+        default=['PH', 'Temperatuur']
+    )
+
+    df_filtered = df[df['Datum_only'] == geselecteerde_datum]
+
+    st.markdown(f"### Meetpunten op {geselecteerde_datum.strftime('%d-%m-%Y')}")
+
+    kaart = folium.Map(location=[52.36, 4.9], zoom_start=13)
+
+    def bepaal_marker_kleur(row):
+        ph = row.get('PH', None)
+        if ph is None or pd.isna(ph):
+            return 'gray'
+        if ph < 6.5 or ph > 9:
+            return 'red'
+        elif 6.5 <= ph <= 7.5:
+            return 'green'
+        else:
+            return 'orange'
+
+    for _, row in df_filtered.iterrows():
+        popup_text = f"<b>{row['Locatie']}</b><br>"
+        for col in waardes:
+            if col in row and pd.notna(row[col]):
+                popup_text += f"{col}: {row[col]}<br>"
+
+        try:
+            lat_str, lon_str = str(row['Coordinaten']).split(',')
+            lat, lon = float(lat_str.strip()), float(lon_str.strip())
+        except Exception:
+            continue
+
+        kleur = bepaal_marker_kleur(row)
+        folium.Marker(
+            location=[lat, lon],
+            popup=folium.Popup(popup_text, max_width=300),
+            icon=folium.Icon(color=kleur)
+        ).add_to(kaart)
+
+    st_folium(kaart, width=900, height=600)
 
 with tab2:
     st.header("Voeg nieuwe meetdata toe")
@@ -134,7 +125,6 @@ with tab2:
             'Buitentemperatuur': buitentemperatuur
         }
 
-        # Data toevoegen aan sessiestate dataframe
         st.session_state.extra_data = pd.concat([st.session_state.extra_data, pd.DataFrame([nieuwe_rij])], ignore_index=True)
-        st.success("Nieuwe meting toegevoegd! Ga terug naar 'Dashboard' tab om de data te zien.")
-
+        st.success("Nieuwe meting toegevoegd!")
+        st.experimental_rerun()  # App herladen om nieuwe data te tonen

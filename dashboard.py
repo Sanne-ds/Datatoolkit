@@ -14,7 +14,17 @@ def load_data():
     # Datum kolom verwerken
     df['Datum'] = pd.to_datetime(df['Meetdag'], dayfirst=True, errors='coerce')
 
-    for _, row in filtered_df.iterrows():
+
+
+    # Coördinaten scheiden in Lat en Lon (komma's → punten)
+    coords = df['Coordinaten'].astype(str).str.replace(",", ".")
+    coords_extracted = coords.str.extract(r'([0-9.]+)[,\s]+([0-9.]+)')
+    coords_extracted.columns = ['Lat', 'Lon']
+    coords_extracted = coords_extracted.astype(float, errors='ignore')  # voorkom crash
+    df = pd.concat([df, coords_extracted], axis=1)
+    df = df.dropna(subset=['Lat', 'Lon'])  # verwijder rijen zonder geldige coördinaten
+
+for _, row in filtered_df.iterrows():
     # Controleer of Lat en Lon geldig zijn
     if pd.notna(row.get('Lat')) and pd.notna(row.get('Lon')):
         try:
@@ -28,15 +38,6 @@ def load_data():
             ).add_to(kaart)
         except Exception as e:
             st.warning(f"Fout bij locatie '{row['Locatie']}': {e}")
-
-    # Coördinaten scheiden in Lat en Lon (komma's → punten)
-    coords = df['Coordinaten'].astype(str).str.replace(",", ".")
-    coords_extracted = coords.str.extract(r'([0-9.]+)[,\s]+([0-9.]+)')
-    coords_extracted.columns = ['Lat', 'Lon']
-    coords_extracted = coords_extracted.astype(float, errors='ignore')  # voorkom crash
-    df = pd.concat([df, coords_extracted], axis=1)
-    df = df.dropna(subset=['Lat', 'Lon'])  # verwijder rijen zonder geldige coördinaten
-
 
     # pH converteren van reeksen ("8,3-8,7") naar gemiddelde
     def extract_ph_mean(ph_val):

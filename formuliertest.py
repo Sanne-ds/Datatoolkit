@@ -135,14 +135,8 @@ with tab2:
     st.header("Nieuwe meting toevoegen")
 
     with st.form("meting_form"):
-        # Locatiekeuze met 'Anders, namelijk...'
-        locatie_opties = ['Gracht', 'Kanaleneiland', 'Singel', 'Prinsengracht', 'Anders, namelijk...']
-        gekozen_locatie = st.selectbox("Meetpunt", locatie_opties)
-
-        if gekozen_locatie == 'Anders, namelijk...':
-            locatie = st.text_input("Voer zelf de locatie in", max_chars=50)
-        else:
-            locatie = gekozen_locatie
+        # Vrij in te vullen locatieveld
+        locatie = st.text_input("Locatie", max_chars=50)
 
         datum = st.date_input("Meetdag")
 
@@ -203,6 +197,7 @@ with tab2:
                     
                 except Exception as e:
                     st.error(f"Er is een onverwachte fout opgetreden: {e}")
+
 
 
 with tab3:

@@ -7,19 +7,25 @@ from datetime import datetime
 
 st.set_page_config(layout="wide")
 
-DATA_PATH = "Waterkwaliteit.csv"
+ORIGINELE_DATA = "Waterkwaliteit.xlsx"
+NIEUWE_METINGEN = "NieuweMetingen.csv"
 
 # ---------- 1. Data inladen ----------
 @st.cache_data
 def load_data():
-    if os.path.exists(DATA_PATH):
-        df = pd.read_csv(DATA_PATH)
-        df['Datum'] = pd.to_datetime(df['Meetdag'], format='%Y-%m-%d', errors='coerce')
+    df_orig = pd.read_excel(ORIGINELE_DATA)
+    df_orig['Datum'] = pd.to_datetime(df_orig['Meetdag'], dayfirst=True, errors='coerce')
+
+    if os.path.exists(NIEUWE_METINGEN):
+        df_nieuw = pd.read_csv(NIEUWE_METINGEN)
+        df_nieuw['Datum'] = pd.to_datetime(df_nieuw['Meetdag'], format='%Y-%m-%d', errors='coerce')
+        df = pd.concat([df_orig, df_nieuw], ignore_index=True)
     else:
-        df = pd.DataFrame()
+        df = df_orig
+
     return df
 
-# ---------- 2. Hoofdpagina met kaart ----------
+# ---------- 2. Kaartweergave ----------
 def kaartpagina(df):
     st.sidebar.header("Filter opties")
     if df.empty:
@@ -43,7 +49,7 @@ def kaartpagina(df):
         except:
             continue
 
-        # Bereken kleur op basis van PH
+        # Bepaal marker kleur op basis van pH
         kleur = "gray"
         try:
             ph = float(row['PH'])
@@ -69,7 +75,7 @@ def kaartpagina(df):
 
     st_folium(kaart, width=900, height=600)
 
-# ---------- 3. Data toevoegen ----------
+# ---------- 3. Meetformulier ----------
 def invoerpagina():
     st.title("Voeg nieuwe meting toe")
 
@@ -109,13 +115,13 @@ def invoerpagina():
                 'Buitentemperatuur': buitentemp
             }
 
-            if os.path.exists(DATA_PATH):
-                df = pd.read_csv(DATA_PATH)
+            if os.path.exists(NIEUWE_METINGEN):
+                df = pd.read_csv(NIEUWE_METINGEN)
                 df = pd.concat([df, pd.DataFrame([nieuwe_rij])], ignore_index=True)
             else:
                 df = pd.DataFrame([nieuwe_rij])
 
-            df.to_csv(DATA_PATH, index=False)
+            df.to_csv(NIEUWE_METINGEN, index=False)
             st.success("Meting opgeslagen!")
 
 # ---------- 4. Tabs ----------

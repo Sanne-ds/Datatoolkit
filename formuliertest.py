@@ -49,8 +49,7 @@ if 'data' not in st.session_state:
 
 df = st.session_state['data']
 
-# Ruwe tab selectie om sidebar inhoud te tonen alleen op 'Kaart'
-tab_info, tab1, tab2, tab3 = st.tabs(["ℹ️ Info", "🗺️ Kaart", "➕ Nieuwe meting", "⚙️ Metingen beheren"])
+tab_info, tab_kaart, tab_nieuw, tab_beheer = st.tabs(["ℹ️ Info", "🗺️ Kaart", "➕ Nieuwe meting", "⚙️ Metingen beheren"])
 
 with tab_info:
     st.title("🌍 Dashboard Waterkwaliteit")
@@ -65,16 +64,16 @@ with tab_info:
         Veel succes!
     """)
 
-with tab1:
-    # Sidebar alleen inhoud toevoegen hier:
-    st.sidebar.header("Filter opties")
+with tab_kaart:
+    st.title("🌊 Waterkwaliteit in Amsterdam")
 
+    # Filters gewoon in de pagina, niet sidebar
     if not df['Datum'].dropna().empty:
-        datum_selectie = st.sidebar.date_input("Kies meetdag", df['Datum'].min())
+        datum_selectie = st.date_input("Kies meetdag", df['Datum'].min())
     else:
-        datum_selectie = st.sidebar.date_input("Kies meetdag", pd.to_datetime('today'))
+        datum_selectie = st.date_input("Kies meetdag", pd.to_datetime('today'))
 
-    waardes = st.sidebar.multiselect(
+    waardes = st.multiselect(
         "Waardes om te tonen",
         ['PH', 'Temperatuur', 'ORP', 'EC', 'CF', 'TDS', 'Humidity', 'Buitentemperatuur'],
         default=['PH', 'Temperatuur']
@@ -82,7 +81,6 @@ with tab1:
 
     filtered_df = df[df['Datum'] == pd.to_datetime(datum_selectie)]
 
-    st.title("🌊 Waterkwaliteit in Amsterdam")
     st.markdown(f"### Meetpunten op {datum_selectie.strftime('%d-%m-%Y')}")
 
     kaart = folium.Map(location=[52.36, 4.9], zoom_start=13)
@@ -121,10 +119,7 @@ with tab1:
 
     st_folium(kaart, width=900, height=600)
 
-with tab2:
-    # Sidebar leeg maken door niks erin te zetten
-    st.sidebar.empty()
-    
+with tab_nieuw:
     st.header("Nieuwe meting toevoegen")
 
     with st.form("meting_form"):
@@ -198,10 +193,7 @@ with tab2:
                 else:
                     st.info("Meting is niet opgeslagen. Controleer de pH-waarde.")
 
-with tab3:
-    # Sidebar leeg maken door niks erin te zetten
-    st.sidebar.empty()
-
+with tab_beheer:
     st.header("Metingen beheren")
 
     if not st.session_state['data'].empty:

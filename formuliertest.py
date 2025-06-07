@@ -48,9 +48,8 @@ if 'data' not in st.session_state:
     st.session_state['data'] = load_data()
 
 df = st.session_state['data']
-st.sidebar.button('Refresh', on_click=load_data.clear)
 
-# Tabs (info tab eerst)
+# Ruwe tab selectie om sidebar inhoud te tonen alleen op 'Kaart'
 tab_info, tab1, tab2, tab3 = st.tabs(["ℹ️ Info", "🗺️ Kaart", "➕ Nieuwe meting", "⚙️ Metingen beheren"])
 
 with tab_info:
@@ -67,7 +66,7 @@ with tab_info:
     """)
 
 with tab1:
-    # ---------- Sidebar filters alleen hier ----------
+    # Sidebar alleen inhoud toevoegen hier:
     st.sidebar.header("Filter opties")
 
     if not df['Datum'].dropna().empty:
@@ -123,6 +122,9 @@ with tab1:
     st_folium(kaart, width=900, height=600)
 
 with tab2:
+    # Sidebar leeg maken door niks erin te zetten
+    st.sidebar.empty()
+    
     st.header("Nieuwe meting toevoegen")
 
     with st.form("meting_form"):
@@ -197,6 +199,9 @@ with tab2:
                     st.info("Meting is niet opgeslagen. Controleer de pH-waarde.")
 
 with tab3:
+    # Sidebar leeg maken door niks erin te zetten
+    st.sidebar.empty()
+
     st.header("Metingen beheren")
 
     if not st.session_state['data'].empty:
@@ -223,7 +228,7 @@ with tab3:
                 st.session_state['data'] = updated_df
                 save_data(updated_df)
                 st.success(f"{len(selected_rows_indices)} meting(en) succesvol verwijderd en opgeslagen!")
-                st.rerun()
+                st.experimental_rerun()
             else:
                 st.warning("Geen metingen geselecteerd om te verwijderen.")
     else:

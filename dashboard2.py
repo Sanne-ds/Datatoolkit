@@ -49,15 +49,25 @@ else:
             # --- Marker kleur bepalen op basis van pH ---
             kleur = "gray"
             try:
-                ph = float(str(row['pH']).replace(',', '.'))
+                ph_raw = str(row['pH']).replace(',', '.').strip()
+            
+                # Check of het een bereik is (bv. "8.3-8.7")
+                if '-' in ph_raw:
+                    start, end = map(float, ph_raw.split('-'))
+                    ph = (start + end) / 2
+                else:
+                    ph = float(ph_raw)
+            
+                # Bepaal kleur
                 if 6.5 <= ph <= 8.5:
                     kleur = "green"
                 elif 5.5 <= ph < 6.5 or 8.5 < ph <= 9.5:
                     kleur = "orange"
                 else:
                     kleur = "red"
-            except:
+            except Exception as e:
                 kleur = "gray"
+
 
             folium.Marker(
                 location=[lat, lon],

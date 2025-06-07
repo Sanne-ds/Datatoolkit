@@ -6,50 +6,38 @@ import re
 
 st.set_page_config(layout="wide")
 
-# Define the file path for your data
-DATA_FILE = "Waterkwaliteit.xlsx" # Or "Waterkwaliteit.csv" if you prefer CSV
-
 # ---------- 1. Data inladen ----------
+DATA_FILE = "Waterkwaliteit.xlsx"
+
 @st.cache_data
 def load_data():
     try:
         df = pd.read_excel(DATA_FILE)
-        
-        # Spaties verwijderen uit kolomnamen
         df.columns = df.columns.str.strip()
 
-        # Ensure 'Meetdag' exists and is converted to datetime
         if 'Meetdag' in df.columns:
             df['Meetdag'] = pd.to_datetime(df['Meetdag'], dayfirst=True, errors='coerce')
         else:
-            # If 'Meetdag' is missing, create it as a dummy column or handle as appropriate
-            # For now, let's create it with NaT (Not a Time) values if missing
             df['Meetdag'] = pd.NaT 
 
-        # Ensure 'Datum' column exists. If it exists, convert it. If not, create from 'Meetdag'.
         if 'Datum' in df.columns:
             df['Datum'] = pd.to_datetime(df['Datum'], dayfirst=True, errors='coerce')
-        elif 'Meetdag' in df.columns: # If 'Datum' is missing but 'Meetdag' exists, use 'Meetdag'
+        elif 'Meetdag' in df.columns:
             df['Datum'] = df['Meetdag']
-        else: # If both are missing, create 'Datum' with NaT values
+        else:
             df['Datum'] = pd.NaT
 
     except FileNotFoundError:
-        # Create an empty DataFrame with ALL expected columns, including 'Datum' and 'Meetdag'
-        # This is crucial for consistency when the file doesn't exist yet.
         columns = [
             'Locatie', 'Meetdag', 'Datum', 'Coordinaten', 'PH', 'Temperatuur',
             'ORP', 'EC', 'CF', 'TDS', 'Humidity', 'Buitentemperatuur'
         ]
         df = pd.DataFrame(columns=columns)
-        
-        # Ensure date columns are of datetime type even in an empty DataFrame
         df['Meetdag'] = pd.to_datetime(df['Meetdag'])
         df['Datum'] = pd.to_datetime(df['Datum'])
-        
+
     return df
 
-# Function to save data
 def save_data(df_to_save):
     try:
         df_to_save.to_excel(DATA_FILE, index=False)
@@ -57,29 +45,24 @@ def save_data(df_to_save):
     except Exception as e:
         st.error(f"Fout bij opslaan van data: {e}")
 
-# Data initialiseren en opslaan in session_state zodat we ze kunnen uitbreiden
 if 'data' not in st.session_state:
     st.session_state['data'] = load_data()
 
 df = st.session_state['data']
 
-# --- Add a button to refresh data if using @st.cache_data ---
-st.sidebar.button('Refresh', on_click=load_data.clear) # This clears the cache for load_data
+st.sidebar.button('Refresh', on_click=load_data.clear)
 
 # Tabs aanmaken
-tab1, tab2, tab3 = st.tabs(["🗺️ Kaart", "➕ Nieuwe meting", "⚙️ Metingen beheren"])
+tab1, tab2, tab3, tab4 = st.tabs(["🗺️ Kaart", "➕ Nieuwe meting", "⚙️ Metingen beheren", "ℹ️ Info"])
 
 with tab1:
-    # ---------- Sidebar filters (kun je ook hier plaatsen voor betere UX) ----------
+    # ---------- Sidebar filters ----------
     st.sidebar.header("Filter opties")
-    
-    # Ensure 'Datum' column has valid datetime objects before finding min
+
     if not df['Datum'].dropna().empty:
         datum_selectie = st.sidebar.date_input("Kies meetdag", df['Datum'].min())
     else:
-        # Provide a default date if no valid dates are found
         datum_selectie = st.sidebar.date_input("Kies meetdag", pd.to_datetime('today'))
-
 
     waardes = st.sidebar.multiselect(
         "Waardes om te tonen",
@@ -87,7 +70,6 @@ with tab1:
         default=['PH', 'Temperatuur']
     )
 
-    # Filter op geselecteerde datum
     filtered_df = df[df['Datum'] == pd.to_datetime(datum_selectie)]
 
     st.title("🌊 Waterkwaliteit in Amsterdam")
@@ -102,17 +84,15 @@ with tab1:
                 popup_text += f"{col}: {row[col]}<br>"
 
         try:
-            # Ensure 'Coordinaten' is a string before splitting
             coords_str = str(row['Coordinaten'])
             lat_str, lon_str = re.split(r',\s*', coords_str)
             lat = float(lat_str)
             lon = float(lon_str)
-        except (ValueError, TypeError): # Handle cases where split fails or conversion to float fails
+        except (ValueError, TypeError):
             continue
 
         kleur = "gray"
         try:
-            # Ensure 'PH' is a string and handle potential comma as decimal separator
             ph_val = float(str(row['PH']).replace(',', '.'))
             if 6.5 <= ph_val <= 8.5:
                 kleur = "green"
@@ -120,7 +100,7 @@ with tab1:
                 kleur = "orange"
             else:
                 kleur = "red"
-        except (ValueError, TypeError): # Handle cases where PH value is not convertible
+        except (ValueError, TypeError):
             kleur = "gray"
 
         folium.Marker(
@@ -135,12 +115,9 @@ with tab2:
     st.header("Nieuwe meting toevoegen")
 
     with st.form("meting_form"):
-        # Vrij in te vullen locatieveld
         locatie = st.text_input("Locatie", max_chars=50)
-
         datum = st.date_input("Meetdag")
 
-        # Coördinaten gesplitst in latitude en longitude
         col_lat, col_lon = st.columns(2)
         with col_lat:
             lat = st.number_input("Latitude", format="%.6f", help="Bijv. 52.370216", value=None)
@@ -164,41 +141,45 @@ with tab2:
                 fouten.append("Locatie is verplicht.")
             if lat is None or lon is None:
                 fouten.append("Zowel latitude als longitude zijn verplicht.")
-            if ph is not None and not (0 <= ph <= 14):
-                fouten.append("pH-waarde moet tussen 0 en 14 liggen.")
 
             if fouten:
                 for fout in fouten:
                     st.error(fout)
             else:
-                try:
-                    coordinaten = f"{lat}, {lon}"
-                    nieuwe_meting = {
-                        'Locatie': locatie,
-                        'Meetdag': pd.Timestamp(datum),
-                        'Datum': pd.Timestamp(datum),
-                        'Coordinaten': coordinaten,
-                        'PH': ph,
-                        'Temperatuur': temperatuur,
-                        'ORP': orp,
-                        'EC': ec,
-                        'CF': cf,
-                        'TDS': tds,
-                        'Humidity': humidity,
-                        'Buitentemperatuur': buitentemperatuur,
-                    }
+                bevestiging_ok = True
+                if ph is not None and ph > 14:
+                    st.warning(f"De ingevoerde pH-waarde ({ph}) lijkt ongewoon hoog. Weet je zeker dat dit klopt?")
+                    bevestiging_ok = st.checkbox("Ja, deze waarde klopt")
 
-                    df = st.session_state['data']
-                    updated_df = pd.concat([df, pd.DataFrame([nieuwe_meting])], ignore_index=True)
-                    st.session_state['data'] = updated_df
+                if ph is None or ph <= 14 or bevestiging_ok:
+                    try:
+                        coordinaten = f"{lat}, {lon}"
+                        nieuwe_meting = {
+                            'Locatie': locatie,
+                            'Meetdag': pd.Timestamp(datum),
+                            'Datum': pd.Timestamp(datum),
+                            'Coordinaten': coordinaten,
+                            'PH': ph,
+                            'Temperatuur': temperatuur,
+                            'ORP': orp,
+                            'EC': ec,
+                            'CF': cf,
+                            'TDS': tds,
+                            'Humidity': humidity,
+                            'Buitentemperatuur': buitentemperatuur,
+                        }
 
-                    save_data(updated_df)
-                    st.success("Nieuwe meting toegevoegd en opgeslagen! Ga terug naar tab 'Kaart' om de update te zien.")
-                    
-                except Exception as e:
-                    st.error(f"Er is een onverwachte fout opgetreden: {e}")
+                        df = st.session_state['data']
+                        updated_df = pd.concat([df, pd.DataFrame([nieuwe_meting])], ignore_index=True)
+                        st.session_state['data'] = updated_df
 
-
+                        save_data(updated_df)
+                        st.success("Nieuwe meting toegevoegd en opgeslagen! Ga terug naar tab 'Kaart' om de update te zien.")
+                        
+                    except Exception as e:
+                        st.error(f"Er is een onverwachte fout opgetreden: {e}")
+                else:
+                    st.info("Controleer de pH-waarde en probeer opnieuw.")
 
 with tab3:
     st.header("Metingen beheren")
@@ -206,8 +187,6 @@ with tab3:
     if not st.session_state['data'].empty:
         st.write("Selecteer de metingen die je wilt verwijderen:")
         
-        # Display the DataFrame with a checkbox for each row
-        # We add a temporary index to allow easy selection and then remove by actual index
         df_display = st.session_state['data'].reset_index()
         df_display.rename(columns={'index': 'Originele Index'}, inplace=True)
 
@@ -218,21 +197,33 @@ with tab3:
                 if st.checkbox(f"Selecteer", key=f"checkbox_{i}"):
                     selected_rows_indices.append(row['Originele Index'])
             with col2:
-                # Display relevant information for the user to identify the row
                 st.write(f"**Locatie:** {row['Locatie']} | **Datum:** {row['Datum'].strftime('%d-%m-%Y')} | **Coördinaten:** {row['Coordinaten']}")
                 st.write(f"PH: {row['PH']}, Temp: {row['Temperatuur']}")
-                st.write("---") # Separator for readability
+                st.write("---")
 
         if st.button("Geselecteerde metingen verwijderen"):
             if selected_rows_indices:
-                # Filter out the selected rows from the original DataFrame
                 df_to_delete_from = st.session_state['data']
                 updated_df = df_to_delete_from.drop(selected_rows_indices).reset_index(drop=True)
                 st.session_state['data'] = updated_df
                 save_data(updated_df)
                 st.success(f"{len(selected_rows_indices)} meting(en) succesvol verwijderd en opgeslagen!")
-                st.rerun() # Rerun to refresh the displayed data and checkboxes
+                st.rerun()
             else:
                 st.warning("Geen metingen geselecteerd om te verwijderen.")
     else:
         st.info("Er zijn nog geen metingen om te beheren.")
+
+with tab4:
+    st.header("ℹ️ Informatie")
+    st.markdown("""
+    Welkom bij het waterkwaliteitsdashboard van Amsterdam!  
+    Hier kun je:
+    - De meetpunten bekijken op de kaart
+    - Nieuwe metingen toevoegen
+    - Bestaande metingen beheren of verwijderen
+
+    **Let op:** De filters aan de linkerkant zijn alleen zichtbaar in het tabblad **'Kaart'**.
+
+    Heb je vragen of feedback? Neem contact op met het datateam.
+    """)

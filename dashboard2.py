@@ -2,12 +2,10 @@ import streamlit as st
 import pandas as pd
 import folium
 from streamlit_folium import st_folium
-from io import StringIO
 import os
 
 st.set_page_config(layout="wide", page_title="Waterkwaliteit Dashboard")
 
-# ---------- Bestandspad ----------
 DATA_FILE = "Waterkwaliteit.xlsx"
 
 # ---------- Data inladen ----------
@@ -16,11 +14,12 @@ def load_data():
     if os.path.exists(DATA_FILE):
         df = pd.read_excel(DATA_FILE)
         df['Datum'] = pd.to_datetime(df['Meetdag'], dayfirst=True, errors='coerce')
+        df['Datum_only'] = df['Datum'].dt.date  # voor vergelijking met date input
         return df
     else:
         return pd.DataFrame()
 
-# ---------- Data opslaan ----------
+# ---------- Data toevoegen ----------
 def append_data(new_row):
     df_existing = load_data()
     df_new = pd.DataFrame([new_row])
@@ -38,8 +37,13 @@ with tab1:
         st.warning("Geen meetdata beschikbaar.")
     else:
         st.sidebar.header("Filter opties")
-        unieke_data = df['Datum'].dropna().dt.date.unique()
-        geselecteerde_datum = st.sidebar.date_input("Kies meetdag", min_value=min(unieke_data), max_value=max(unieke_data))
+        unieke_data = sorted(df['Datum_only'].dropna().unique())
+        geselecteerde_datum = st.sidebar.date_input(
+            "Kies meetdag",
+            value=unieke_data[-1] if unieke_data else None,
+            min_value=min(unieke_data),
+            max_value=max(unieke_data)
+        )
 
         waardes = st.sidebar.multiselect(
             "Waardes om te tonen", 
@@ -47,7 +51,7 @@ with tab1:
             default=['PH']
         )
 
-        df_filtered = df[df['Datum'].dt.date == geselecteerde_datum]
+        df_filtered = df[df['Datum_only'] == geselecteerde_datum]
 
         st.title("Waterkwaliteit Meetdashboard")
         st.markdown(f"### Meetpunten op {geselecteerde_datum.strftime('%d-%m-%Y')}")
@@ -94,7 +98,7 @@ with tab2:
     st.header("Nieuwe meetdata toevoegen")
 
     with st.form("meetdata_form"):
-        datum = st.date_input("Meetdag")
+        datum = st.date_input("Meetdag (datum)")
         tijd = st.text_input("Tijdstip")
         locatie = st.text_input("Locatie")
         coordinaten = st.text_input("Coördinaten (lat, lon)")
@@ -129,4 +133,4 @@ with tab2:
                 "Buitentemperatuur": buitentemp,
             }
             append_data(nieuwe_waarde)
-            st.success("Nieuwe meetdata toegevoegd! Ga naar het dashboard-tab om het te bekijken.")
+            st.success("Nieuwe meetdata toegevoegd! Bekijk het in het dashboard-tab.")

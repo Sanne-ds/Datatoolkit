@@ -78,3 +78,54 @@ for _, row in filtered_df.iterrows():
 
 # ---------- 5. Kaart tonen ----------
 st_folium(kaart, width=900, height=600)
+
+# ---------- 6. Gegevens toevoegen ----------
+st.markdown("### Voeg nieuwe meting toe")
+
+with st.form("meet_data_form"):
+    meetdag = st.date_input("Meetdag")
+    tijdstip = st.text_input("Tijdstip (bijv. 13.00-13.15)")
+    locatie = st.text_input("Locatie")
+    coordinaten = st.text_input("Coordinaten (bijv. 52.36, 4.90)")
+    ph = st.number_input("pH", min_value=0.0, max_value=14.0, step=0.01)
+    temperatuur = st.number_input("Temperatuur (°C)", step=0.1)
+    orp = st.number_input("ORP", step=1.0)
+    ec = st.number_input("EC", step=0.01)
+    cf = st.number_input("CF", step=0.1)
+    tds = st.number_input("TDS", step=1.0)
+    humidity = st.text_input("Humidity (bijv. 30%)")
+    zon_schaduw = st.selectbox("Zon/schaduw", ['zon', 'schaduw'])
+    meetpunt = st.selectbox("Meetpunt", ['kade', 'steiger'])
+    buitentemp = st.number_input("Buitentemperatuur", step=1.0)
+
+    submitted = st.form_submit_button("Voeg toe aan dataset")
+
+    if submitted:
+        nieuwe_rij = {
+            'Meetdag': meetdag.strftime('%d-%m'),
+            'Tijdstip': tijdstip,
+            'Locatie': locatie,
+            'Coordinaten': coordinaten,
+            'PH': ph,
+            'Temperatuur': temperatuur,
+            'ORP': orp,
+            'EC': ec,
+            'CF': cf,
+            'TDS': tds,
+            'Humidity': humidity,
+            'zon/schaduw': zon_schaduw,
+            'meetpunt': meetpunt,
+            'Buitentemperatuur': buitentemp
+        }
+
+        nieuwe_df = pd.DataFrame([nieuwe_rij])
+
+        try:
+            bestaande_df = pd.read_csv("Waterkwaliteit_data.csv")
+            updated_df = pd.concat([bestaande_df, nieuwe_df], ignore_index=True)
+        except FileNotFoundError:
+            updated_df = nieuwe_df
+
+        updated_df.to_csv("Waterkwaliteit_data.csv", index=False)
+        st.success("Nieuwe meting toegevoegd!")
+

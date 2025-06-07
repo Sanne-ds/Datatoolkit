@@ -1,7 +1,4 @@
 streamlit
 pandas
-pydeck
 folium
-streamlitfolium
-stfolium
-re
+streamlit-folium

@@ -10,30 +10,46 @@ st.set_page_config(layout="wide")
 DATA_FILE = "Waterkwaliteit.xlsx" # Or "Waterkwaliteit.csv" if you prefer CSV
 
 # ---------- 1. Data inladen ----------
-# Remove @st.cache_data if you want the data to always reflect the latest file content
-# However, for performance, you might keep it and add a clear cache button if needed.
-# For now, let's keep it to demonstrate how a button could refresh it.
 @st.cache_data
 def load_data():
     try:
         df = pd.read_excel(DATA_FILE)
+        
+        # Spaties verwijderen uit kolomnamen
+        df.columns = df.columns.str.strip()
+
+        # Ensure 'Meetdag' exists and is converted to datetime
+        if 'Meetdag' in df.columns:
+            df['Meetdag'] = pd.to_datetime(df['Meetdag'], dayfirst=True, errors='coerce')
+        else:
+            # If 'Meetdag' is missing, create it as a dummy column or handle as appropriate
+            # For now, let's create it with NaT (Not a Time) values if missing
+            df['Meetdag'] = pd.NaT 
+
+        # Ensure 'Datum' column exists. If it exists, convert it. If not, create from 'Meetdag'.
+        if 'Datum' in df.columns:
+            df['Datum'] = pd.to_datetime(df['Datum'], dayfirst=True, errors='coerce')
+        elif 'Meetdag' in df.columns: # If 'Datum' is missing but 'Meetdag' exists, use 'Meetdag'
+            df['Datum'] = df['Meetdag']
+        else: # If both are missing, create 'Datum' with NaT values
+            df['Datum'] = pd.NaT
+
     except FileNotFoundError:
-        # Create an empty DataFrame with the expected columns if the file doesn't exist
-        # This is useful if you start with no file or it gets deleted.
-        columns = ['Locatie', 'Meetdag', 'Datum', 'Coordinaten', 'PH', 'Temperatuur', 'ORP', 'EC', 'CF', 'TDS', 'Humidity', 'Buitentemperatuur']
+        # Create an empty DataFrame with ALL expected columns, including 'Datum' and 'Meetdag'
+        # This is crucial for consistency when the file doesn't exist yet.
+        columns = [
+            'Locatie', 'Meetdag', 'Datum', 'Coordinaten', 'PH', 'Temperatuur',
+            'ORP', 'EC', 'CF', 'TDS', 'Humidity', 'Buitentemperatuur'
+        ]
         df = pd.DataFrame(columns=columns)
         
-    # Spaties verwijderen uit kolomnamen
-    df.columns = df.columns.str.strip()
-
-    # Datum-kolom aanmaken
-    # Ensure 'Meetdag' is in datetime format before creating 'Datum'
-    if 'Meetdag' in df.columns:
-        df['Meetdag'] = pd.to_datetime(df['Meetdag'], dayfirst=True, errors='coerce')
-    df['Datum'] = pd.to_datetime(df['Datum'], dayfirst=True, errors='coerce') # Ensure 'Datum' is also datetime
-
+        # Ensure date columns are of datetime type even in an empty DataFrame
+        df['Meetdag'] = pd.to_datetime(df['Meetdag'])
+        df['Datum'] = pd.to_datetime(df['Datum'])
+        
     return df
 
+# The rest of your code remains largely the same
 # Data initialiseren en opslaan in session_state zodat we ze kunnen uitbreiden
 if 'data' not in st.session_state:
     st.session_state['data'] = load_data()
@@ -54,7 +70,8 @@ with tab1:
     if not df['Datum'].dropna().empty:
         datum_selectie = st.sidebar.date_input("Kies meetdag", df['Datum'].min())
     else:
-        datum_selectie = st.sidebar.date_input("Kies meetdag")
+        # Provide a default date if no valid dates are found
+        datum_selectie = st.sidebar.date_input("Kies meetdag", pd.to_datetime('today'))
 
 
     waardes = st.sidebar.multiselect(
@@ -78,14 +95,17 @@ with tab1:
                 popup_text += f"{col}: {row[col]}<br>"
 
         try:
-            lat_str, lon_str = re.split(r',\s*', str(row['Coordinaten']))
+            # Ensure 'Coordinaten' is a string before splitting
+            coords_str = str(row['Coordinaten'])
+            lat_str, lon_str = re.split(r',\s*', coords_str)
             lat = float(lat_str)
             lon = float(lon_str)
-        except:
+        except (ValueError, TypeError): # Handle cases where split fails or conversion to float fails
             continue
 
         kleur = "gray"
         try:
+            # Ensure 'PH' is a string and handle potential comma as decimal separator
             ph_val = float(str(row['PH']).replace(',', '.'))
             if 6.5 <= ph_val <= 8.5:
                 kleur = "green"
@@ -93,7 +113,7 @@ with tab1:
                 kleur = "orange"
             else:
                 kleur = "red"
-        except:
+        except (ValueError, TypeError): # Handle cases where PH value is not convertible
             kleur = "gray"
 
         folium.Marker(

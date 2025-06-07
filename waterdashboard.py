@@ -64,7 +64,7 @@ if 'data' not in st.session_state:
 df = st.session_state['data']
 
 # --- Add a button to refresh data if using @st.cache_data ---
-st.sidebar.button('Ververs Data', on_click=load_data.clear) # This clears the cache for load_data
+st.sidebar.button('Refresh', on_click=load_data.clear) # This clears the cache for load_data
 
 # Tabs aanmaken
 tab1, tab2, tab3 = st.tabs(["🗺️ Kaart", "➕ Nieuwe meting", "⚙️ Metingen beheren"])

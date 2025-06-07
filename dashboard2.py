@@ -14,7 +14,9 @@ NIEUWE_METINGEN = "NieuweMetingen.csv"
 @st.cache_data
 def load_data():
     df_orig = pd.read_excel(ORIGINELE_DATA)
-    df_orig['Datum'] = pd.to_datetime(df_orig['Meetdag'], dayfirst=True, errors='coerce')
+
+    # Voeg jaartal toe aan Excel-datums (bijv. 2025)
+    df_orig['Datum'] = pd.to_datetime(df_orig['Meetdag'].astype(str) + '-2025', format='%d-%b-%Y', errors='coerce')
 
     if os.path.exists(NIEUWE_METINGEN):
         df_nieuw = pd.read_csv(NIEUWE_METINGEN)

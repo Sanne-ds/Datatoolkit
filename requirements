@@ -2,4 +2,6 @@ streamlit
 pandas
 pydeck
 folium
+streamlit_folium
+st_folium
 re

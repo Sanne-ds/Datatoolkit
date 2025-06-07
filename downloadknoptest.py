@@ -7,8 +7,7 @@ import io
 
 st.set_page_config(layout="wide")
 
-# Define the file path for your data
-DATA_FILE = "Waterkwaliteit.xlsx"  # Or "Waterkwaliteit.csv" if you prefer CSV
+DATA_FILE = "Waterkwaliteit.xlsx"
 
 # ---------- 1. Data inladen ----------
 @st.cache_data
@@ -16,19 +15,16 @@ def load_data():
     try:
         df = pd.read_excel(DATA_FILE)
         df.columns = df.columns.str.strip()
-
         if 'Meetdag' in df.columns:
             df['Meetdag'] = pd.to_datetime(df['Meetdag'], dayfirst=True, errors='coerce')
         else:
             df['Meetdag'] = pd.NaT
-
         if 'Datum' in df.columns:
             df['Datum'] = pd.to_datetime(df['Datum'], dayfirst=True, errors='coerce')
         elif 'Meetdag' in df.columns:
             df['Datum'] = df['Meetdag']
         else:
             df['Datum'] = pd.NaT
-
     except FileNotFoundError:
         columns = [
             'Locatie', 'Meetdag', 'Datum', 'Coordinaten', 'PH', 'Temperatuur',
@@ -39,7 +35,6 @@ def load_data():
         df['Datum'] = pd.to_datetime(df['Datum'])
     return df
 
-# Function to save data
 def save_data(df_to_save):
     try:
         df_to_save.to_excel(DATA_FILE, index=False)
@@ -47,34 +42,30 @@ def save_data(df_to_save):
     except Exception as e:
         st.error(f"Fout bij opslaan van data: {e}")
 
-# Data initialiseren en opslaan in session_state zodat we ze kunnen uitbreiden
 if 'data' not in st.session_state:
     st.session_state['data'] = load_data()
 
 df = st.session_state['data']
 
-# Add button to refresh data cache
 st.sidebar.button('Refresh', on_click=load_data.clear)
 
-# Tabs aanmaken: Intro, Kaart, Nieuwe meting, Metingen beheren
-tab_intro, tab1, tab2, tab3 = st.tabs(["ℹ️ Introductie", "🗺️ Kaart", "➕ Nieuwe meting", "⚙️ Metingen beheren"])
+# Tabs aanmaken
+tab0, tab1, tab2, tab3 = st.tabs(["ℹ️ Info", "🗺️ Kaart", "➕ Nieuwe meting", "⚙️ Metingen beheren"])
 
-with tab_intro:
-    st.title("Welkom bij het Waterkwaliteitsdashboard 🌊")
+with tab0:
+    st.title("Welkom bij het Waterkwaliteitsdashboard")
     st.markdown("""
-    Dit dashboard toont waterkwaliteitsmetingen in Amsterdam.
+    Dit dashboard geeft inzicht in de waterkwaliteitmetingen in Amsterdam.
     
-    **Gebruik de tab 'Kaart' om metingen op een kaart te bekijken met filteropties.**  
-    **In 'Nieuwe meting' kun je data toevoegen.**  
-    **'Metingen beheren' biedt opties om metingen te verwijderen of te downloaden.**
-    
-    Veel succes!
+    - Bekijk op de kaart de meetpunten en hun waarden.
+    - Voeg nieuwe metingen toe.
+    - Beheer bestaande metingen.
     """)
 
 with tab1:
     st.title("🌊 Waterkwaliteit in Amsterdam")
 
-    # Filters in tab ipv sidebar
+    # Filters direct in tab (niet in sidebar)
     if not df['Datum'].dropna().empty:
         datum_selectie = st.date_input("Kies meetdag", df['Datum'].min())
     else:
@@ -140,13 +131,17 @@ with tab2:
             lon = st.number_input("Longitude", format="%.6f", help="Bijv. 4.895168", value=None)
 
         ph = st.number_input("PH", format="%.2f", step=0.1, help="Bijv. 7.2", value=None)
+        if ph is not None and ph > 14:
+            confirm = st.checkbox(f"PH waarde is hoog ({ph}), weet je zeker dat dit klopt?")
+        else:
+            confirm = True
+
         temperatuur = st.number_input("Temperatuur (°C)", format="%.1f", step=0.1, help="Bijv. 20.5", value=None)
         orp = st.number_input("ORP", value=None)
         ec = st.number_input("EC", value=None)
         cf = st.number_input("CF", value=None)
         tds = st.number_input("TDS", value=None)
-        humidity = st.number_input("Humidity (%)", min_value=0.0, max_value=100.0, format="%.1f", step=0.1,
-                                   help="Geef een waarde tussen 0 en 100", value=None)
+        humidity = st.number_input("Humidity (%)", min_value=0.0, max_value=100.0, format="%.1f", step=0.1, help="Geef een waarde tussen 0 en 100", value=None)
         buitentemperatuur = st.number_input("Buitentemperatuur (°C)", value=None)
 
         submitted = st.form_submit_button("Toevoegen")
@@ -157,14 +152,8 @@ with tab2:
                 fouten.append("Locatie is verplicht.")
             if lat is None or lon is None:
                 fouten.append("Zowel latitude als longitude zijn verplicht.")
-
-            if ph is not None:
-                if ph < 0:
-                    fouten.append("pH-waarde kan niet negatief zijn.")
-                elif ph > 14:
-                    confirm = st.checkbox("pH-waarde is hoger dan 14. Weet je zeker dat dit klopt?")
-                    if not confirm:
-                        fouten.append("Bevestig dat de pH-waarde klopt.")
+            if ph is not None and not confirm:
+                fouten.append("Bevestig dat de hoge pH waarde klopt.")
 
             if fouten:
                 for fout in fouten:
@@ -193,7 +182,6 @@ with tab2:
 
                     save_data(updated_df)
                     st.success("Nieuwe meting toegevoegd en opgeslagen! Ga terug naar tab 'Kaart' om de update te zien.")
-
                 except Exception as e:
                     st.error(f"Er is een onverwachte fout opgetreden: {e}")
 
@@ -215,7 +203,11 @@ with tab3:
                 (st.session_state['data']['Datum'] <= pd.to_datetime(eind_datum))
             ]
         else:
-            filtered_df = st.session_state['data']
+            start_datum = eind_datum = datum_selectie if not isinstance(datum_selectie, list) else datum_selectie[0]
+            filtered_df = st.session_state['data'][
+                (st.session_state['data']['Datum'] >= pd.to_datetime(start_datum)) &
+                (st.session_state['data']['Datum'] <= pd.to_datetime(eind_datum))
+            ]
 
         st.write(f"Toon metingen tussen {start_datum.strftime('%d-%m-%Y')} en {eind_datum.strftime('%d-%m-%Y')}")
 
@@ -246,19 +238,23 @@ with tab3:
             else:
                 st.warning("Geen metingen geselecteerd om te verwijderen.")
 
+        # Download knop
         def convert_df_to_excel(df_to_convert):
             output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                df_to_convert.to_excel(writer, index=False, sheet_name='Data')
-            return output.getvalue()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df_to_convert.to_excel(writer, index=False, sheet_name='Metingen')
+                writer.save()
+            processed_data = output.getvalue()
+            return processed_data
 
         excel_data = convert_df_to_excel(filtered_df)
 
         st.download_button(
-            label="Download gefilterde data als Excel",
+            label="Download geselecteerde data als Excel",
             data=excel_data,
             file_name=f"metingen_{start_datum.strftime('%Y%m%d')}_tot_{eind_datum.strftime('%Y%m%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
     else:
         st.info("Er zijn nog geen metingen om te beheren.")

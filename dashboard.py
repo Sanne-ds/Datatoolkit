@@ -14,6 +14,21 @@ def load_data():
     # Datum kolom verwerken
     df['Datum'] = pd.to_datetime(df['Meetdag'], dayfirst=True, errors='coerce')
 
+    for _, row in filtered_df.iterrows():
+    # Controleer of Lat en Lon geldig zijn
+    if pd.notna(row.get('Lat')) and pd.notna(row.get('Lon')):
+        try:
+            popup_text = f"<b>{row['Locatie']}</b><br>"
+            for col in waardes:
+                if col in row and pd.notna(row[col]):
+                    popup_text += f"{col}: {row[col]}<br>"
+            folium.Marker(
+                location=[float(row['Lat']), float(row['Lon'])],
+                popup=folium.Popup(popup_text, max_width=300)
+            ).add_to(kaart)
+        except Exception as e:
+            st.warning(f"Fout bij locatie '{row['Locatie']}': {e}")
+
     # Coördinaten scheiden in Lat en Lon (komma's → punten)
     coords = df['Coordinaten'].astype(str).str.replace(",", ".")
     coords_extracted = coords.str.extract(r'([0-9.]+)[,\s]+([0-9.]+)')

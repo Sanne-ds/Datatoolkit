@@ -3,13 +3,12 @@ import pandas as pd
 import folium
 from streamlit_folium import st_folium
 import re
-import io
+from io import BytesIO
 
 st.set_page_config(layout="wide")
 
 DATA_FILE = "Waterkwaliteit.xlsx"
 
-# ---------- 1. Data inladen ----------
 @st.cache_data
 def load_data():
     try:
@@ -42,6 +41,13 @@ def save_data(df_to_save):
     except Exception as e:
         st.error(f"Fout bij opslaan van data: {e}")
 
+def convert_df_to_excel(df):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False)
+    processed_data = output.getvalue()
+    return processed_data
+
 if 'data' not in st.session_state:
     st.session_state['data'] = load_data()
 
@@ -49,23 +55,22 @@ df = st.session_state['data']
 
 st.sidebar.button('Refresh', on_click=load_data.clear)
 
-# Tabs aanmaken
-tab0, tab1, tab2, tab3 = st.tabs(["ℹ️ Info", "🗺️ Kaart", "➕ Nieuwe meting", "⚙️ Metingen beheren"])
-
-with tab0:
-    st.title("Welkom bij het Waterkwaliteitsdashboard")
-    st.markdown("""
-    Dit dashboard geeft inzicht in de waterkwaliteitmetingen in Amsterdam.
-    
-    - Bekijk op de kaart de meetpunten en hun waarden.
-    - Voeg nieuwe metingen toe.
-    - Beheer bestaande metingen.
-    """)
+tab1, tab2, tab3, tab4 = st.tabs(["ℹ️ Info", "🗺️ Kaart", "➕ Nieuwe meting", "⚙️ Metingen beheren"])
 
 with tab1:
+    st.title("Welkom bij het Waterkwaliteit Dashboard")
+    st.markdown("""
+        Dit dashboard toont de waterkwaliteitsmetingen in Amsterdam.
+        - Gebruik de kaart om metingen te bekijken.
+        - Voeg nieuwe metingen toe in het tweede tabblad.
+        - Beheer en verwijder metingen in het laatste tabblad.
+        Veel succes!
+    """)
+
+with tab2:
     st.title("🌊 Waterkwaliteit in Amsterdam")
 
-    # Filters direct in tab (niet in sidebar)
+    # Filters in het tabblad zelf (niet sidebar)
     if not df['Datum'].dropna().empty:
         datum_selectie = st.date_input("Kies meetdag", df['Datum'].min())
     else:
@@ -88,7 +93,6 @@ with tab1:
         for col in waardes:
             if col in row and pd.notna(row[col]):
                 popup_text += f"{col}: {row[col]}<br>"
-
         try:
             coords_str = str(row['Coordinaten'])
             lat_str, lon_str = re.split(r',\s*', coords_str)
@@ -96,7 +100,6 @@ with tab1:
             lon = float(lon_str)
         except (ValueError, TypeError):
             continue
-
         kleur = "gray"
         try:
             ph_val = float(str(row['PH']).replace(',', '.'))
@@ -117,13 +120,12 @@ with tab1:
 
     st_folium(kaart, width=900, height=600)
 
-with tab2:
+with tab3:
     st.header("Nieuwe meting toevoegen")
 
     with st.form("meting_form"):
         locatie = st.text_input("Locatie", max_chars=50)
         datum = st.date_input("Meetdag")
-
         col_lat, col_lon = st.columns(2)
         with col_lat:
             lat = st.number_input("Latitude", format="%.6f", help="Bijv. 52.370216", value=None)
@@ -131,10 +133,10 @@ with tab2:
             lon = st.number_input("Longitude", format="%.6f", help="Bijv. 4.895168", value=None)
 
         ph = st.number_input("PH", format="%.2f", step=0.1, help="Bijv. 7.2", value=None)
-        if ph is not None and ph > 14:
-            confirm = st.checkbox(f"PH waarde is hoog ({ph}), weet je zeker dat dit klopt?")
-        else:
-            confirm = True
+        if ph is not None and (ph < 0 or ph > 14):
+            bevestig = st.checkbox("PH buiten normale range (0-14). Weet je zeker dat dit klopt?")
+            if not bevestig:
+                st.warning("Bevestig dat de PH-waarde klopt om door te gaan.")
 
         temperatuur = st.number_input("Temperatuur (°C)", format="%.1f", step=0.1, help="Bijv. 20.5", value=None)
         orp = st.number_input("ORP", value=None)
@@ -152,8 +154,8 @@ with tab2:
                 fouten.append("Locatie is verplicht.")
             if lat is None or lon is None:
                 fouten.append("Zowel latitude als longitude zijn verplicht.")
-            if ph is not None and not confirm:
-                fouten.append("Bevestig dat de hoge pH waarde klopt.")
+            if ph is not None and (ph < 0 or ph > 14) and not bevestig:
+                fouten.append("Bevestig dat de PH-waarde klopt door het vinkje aan te zetten.")
 
             if fouten:
                 for fout in fouten:
@@ -185,29 +187,29 @@ with tab2:
                 except Exception as e:
                     st.error(f"Er is een onverwachte fout opgetreden: {e}")
 
-with tab3:
+with tab4:
     st.header("Metingen beheren")
 
     if not st.session_state['data'].empty:
         min_datum = st.session_state['data']['Datum'].min()
         max_datum = st.session_state['data']['Datum'].max()
-        datum_selectie = st.date_input("Selecteer datum (of meerdere)", 
-                                       [min_datum, max_datum],
-                                       min_value=min_datum,
-                                       max_value=max_datum)
 
-        if isinstance(datum_selectie, list) and len(datum_selectie) == 2:
+        datum_selectie = st.date_input(
+            "Selecteer datum bereik",
+            value=(min_datum, max_datum),
+            min_value=min_datum,
+            max_value=max_datum
+        )
+
+        if isinstance(datum_selectie, tuple) and len(datum_selectie) == 2:
             start_datum, eind_datum = datum_selectie
-            filtered_df = st.session_state['data'][
-                (st.session_state['data']['Datum'] >= pd.to_datetime(start_datum)) &
-                (st.session_state['data']['Datum'] <= pd.to_datetime(eind_datum))
-            ]
         else:
-            start_datum = eind_datum = datum_selectie if not isinstance(datum_selectie, list) else datum_selectie[0]
-            filtered_df = st.session_state['data'][
-                (st.session_state['data']['Datum'] >= pd.to_datetime(start_datum)) &
-                (st.session_state['data']['Datum'] <= pd.to_datetime(eind_datum))
-            ]
+            start_datum = eind_datum = datum_selectie
+
+        filtered_df = st.session_state['data'][
+            (st.session_state['data']['Datum'] >= pd.to_datetime(start_datum)) &
+            (st.session_state['data']['Datum'] <= pd.to_datetime(eind_datum))
+        ]
 
         st.write(f"Toon metingen tussen {start_datum.strftime('%d-%m-%Y')} en {eind_datum.strftime('%d-%m-%Y')}")
 
@@ -238,23 +240,12 @@ with tab3:
             else:
                 st.warning("Geen metingen geselecteerd om te verwijderen.")
 
-        # Download knop
-        def convert_df_to_excel(df_to_convert):
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                df_to_convert.to_excel(writer, index=False, sheet_name='Metingen')
-                writer.save()
-            processed_data = output.getvalue()
-            return processed_data
-
         excel_data = convert_df_to_excel(filtered_df)
-
         st.download_button(
-            label="Download geselecteerde data als Excel",
+            label="Download geselecteerde metingen als Excel",
             data=excel_data,
-            file_name=f"metingen_{start_datum.strftime('%Y%m%d')}_tot_{eind_datum.strftime('%Y%m%d')}.xlsx",
+            file_name=f"waterkwaliteit_{start_datum.strftime('%Y%m%d')}_tot_{eind_datum.strftime('%Y%m%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
     else:
         st.info("Er zijn nog geen metingen om te beheren.")
